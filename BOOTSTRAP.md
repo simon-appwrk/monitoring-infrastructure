@@ -264,7 +264,7 @@ LOKI_SK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.MINI
 
 MINIO_POD=$(kubectl -n obs-storage get pod -l release=minio -o jsonpath='{.items[0].metadata.name}')
 
-kubectl -n obs-storage exec "$MINIO_POD" -- env \
+kubectl -n obs-storage exec -i "$MINIO_POD" -- env \
   ROOT_USER="$ROOT_USER" ROOT_PASS="$ROOT_PASS" \
   LOKI_AK="$LOKI_AK"     LOKI_SK="$LOKI_SK" \
   bash -e <<'EOF'

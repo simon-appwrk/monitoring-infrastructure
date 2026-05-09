@@ -198,6 +198,18 @@ prometheusOperator:
     limits:
       memory: 200Mi
 
+  # Disable the admission webhook + its bootstrap Jobs.
+  # Why: those Jobs are Helm hooks that get deleted after running, which ArgoCD
+  # doesn't understand and reports as "Job missing — sync failed" on every reconcile.
+  # We don't need the webhook for our flow (PrometheusRule validation happens via
+  # `promtool check rules` in CI / on push, not at admission time).
+  admissionWebhooks:
+    enabled: false
+    patch:
+      enabled: false
+    certManager:
+      enabled: false
+
 # k3s doesn't expose these on standard endpoints — disable to avoid noisy "down" alerts
 kubeControllerManager:
   enabled: false
