@@ -17,6 +17,15 @@ singleBinary:
     enabled: true
     size: 5Gi
     storageClass: local-path
+  # Mount log-based alert rules from the loki-rules ConfigMap.
+  # In SingleBinary mode the volume mounts MUST go under singleBinary:, not top-level.
+  extraVolumes:
+    - name: loki-rules
+      configMap:
+        name: loki-rules
+  extraVolumeMounts:
+    - name: loki-rules
+      mountPath: /var/loki/rules/fake     # 'fake' = default tenant in single-tenant mode
 
 # Disable the scaled deployments
 read:
@@ -76,15 +85,6 @@ loki:
       local:
         directory: /var/loki/rules
     rule_path: /var/loki/rules-temp
-
-# Mount log-based alert rules from the loki-rules ConfigMap
-extraVolumes:
-  - name: loki-rules
-    configMap:
-      name: loki-rules
-extraVolumeMounts:
-  - name: loki-rules
-    mountPath: /var/loki/rules/fake     # 'fake' = default tenant in single-tenant mode
 
 # Gateway = nginx fronting Loki. Push (write) on 30100, query (read) on 30101.
 gateway:

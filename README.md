@@ -24,24 +24,11 @@ k8s/         Central stack (Helm values + manifests, NodePort)
   <comp>/values.yaml                  ← committed, public
   <comp>/values.secrets.example.yaml  ← committed, dummy values
   <comp>/values.secrets.local.yaml    ← GITIGNORED, real secrets (you create on the server)
-  cloudwatch-exporter/                ← YACE: AWS CloudWatch metrics → Prometheus (optional)
 agents/      Per-host bundles: docker-compose, systemd, ansible, k8s daemonset
 alerting/    Prometheus + Loki rules
 dashboards/  Grafana JSON dashboards
-aws/         AWS-side integrations
-  lambda-promtail/                    ← CloudWatch Logs → Loki via Lambda + Terraform (optional)
 examples/    Project onboarding template + snippets (PM2, etc.)
 ```
-
-## Optional integrations
-
-These ship in the repo but are NOT installed by default — turn them on per project as needed:
-
-| Integration   | Path                                               | Purpose                                       |
-|---------------|----------------------------------------------------|-----------------------------------------------|
-| PM2 logs      | [examples/pm2-promtail-snippet.yml](examples/pm2-promtail-snippet.yml)             | Tail PM2-managed Node.js app logs             |
-| CloudWatch metrics | [k8s/cloudwatch-exporter/](k8s/cloudwatch-exporter/)             | Pull AWS metrics (RDS/ALB/SQS/Lambda) via YACE |
-| CloudWatch logs    | [aws/lambda-promtail/](aws/lambda-promtail/)                     | Ship CloudWatch Log Groups to Loki via Lambda |
 
 ## Secrets workflow
 

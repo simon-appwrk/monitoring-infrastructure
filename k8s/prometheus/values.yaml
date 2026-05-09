@@ -54,11 +54,12 @@ prometheus:
             requests:
               storage: 30Gi
 
-    # Pick up rules from any ConfigMap with this label (created from ../alerting/)
-    ruleSelector:
-      matchLabels:
-        prometheus: kube-prometheus
-    ruleNamespaceSelector: {}
+    # Pick up any PrometheusRule in the same namespace, regardless of labels.
+    # (Default behaviour with the kube-prometheus-stack chart restricts to release=kps,
+    # which would exclude our custom rules. Setting nil-uses-helm-values=false makes
+    # an empty selector mean "match everything".)
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelectorNilUsesHelmValues: false
 
     externalLabels:
       cluster: central

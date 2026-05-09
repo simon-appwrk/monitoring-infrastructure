@@ -27,7 +27,9 @@ grafana.ini:
     disable_login_form: false
     oauth_auto_login: false
   auth.generic_oauth:
-    enabled: true
+    # Set to true once Keycloak is up AND grafanaOidc.clientSecret is filled in
+    # values.secrets.local.yaml. Until then, log in with the local admin user.
+    enabled: false
     name: Keycloak
     client_id: grafana
     # client_secret comes from Secret "grafana-oidc" via env (see envFromSecret below)
@@ -64,7 +66,9 @@ datasources:
       - name: Loki
         type: loki
         access: proxy
-        url: http://loki.obs-logs.svc:3100
+        # Loki gateway service (created by the loki chart). Confirmed by chart's
+        # post-install message: http://loki-gateway.obs-logs.svc.cluster.local/
+        url: http://loki-gateway.obs-logs.svc:80
         editable: false
         jsonData:
           maxLines: 5000

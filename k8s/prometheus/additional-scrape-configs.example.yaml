@@ -59,17 +59,6 @@
         team: backend
 
 # ──────────────────────────────────────────────────────────────────
-# CloudWatch metrics via YACE (only if cloudwatch-exporter is deployed)
-# See k8s/cloudwatch-exporter/README.md
-# ──────────────────────────────────────────────────────────────────
-- job_name: 'cloudwatch-yace'
-  static_configs:
-    - targets: ['yace-yet-another-cloudwatch-exporter.obs-metrics.svc:5000']
-      labels:
-        host_class: aws
-        # project / environment / team labels come from AWS resource tags via YACE
-
-# ──────────────────────────────────────────────────────────────────
 # Blackbox availability checks (requires prometheus-blackbox-exporter
 # deployed separately; below is the scrape pattern)
 # ──────────────────────────────────────────────────────────────────

@@ -173,8 +173,8 @@ echo "==> kube-prometheus-stack"
 helm upgrade --install kps prometheus-community/kube-prometheus-stack \
   -n obs-metrics \
   -f prometheus/values.yaml \
-  --set-file alertmanager.config=alertmanager/config.yaml \
-  --wait
+  -f alertmanager/config.yaml \
+  --timeout 10m --wait
 
 echo "==> Grafana"
 helm upgrade --install grafana grafana/grafana \
@@ -189,14 +189,44 @@ helm upgrade --install harbor harbor/harbor \
   --wait
 
 # ──────────────────────────────────────────────────────────────────
-# Prometheus alert rules ConfigMap
+# Prometheus alert rules — wrapped in PrometheusRule CRDs.
+# (kube-prometheus-stack's Prometheus selects PrometheusRule resources, not ConfigMaps.)
+# Excludes:
+#   - log-based.yml          → Loki ruler (separate ConfigMap, created earlier)
+#   - application.template.yml → placeholder; copy to alerting/projects/<name>.yml first
 # ──────────────────────────────────────────────────────────────────
-echo "==> Prometheus alert rules"
-kubectl create configmap prometheus-rules \
-  -n obs-metrics \
-  --from-file=../alerting/ \
-  --dry-run=client -o yaml | \
-  kubectl label --local --overwrite -f - prometheus=kube-prometheus -o yaml | \
-  kubectl apply -f -
+echo "==> Prometheus alert rules (PrometheusRule CRDs)"
+for f in ../alerting/infrastructure.yml \
+         ../alerting/containers.yml \
+         ../alerting/availability.yml; do
+  [[ -f $f ]] || continue
+  rule_name=$(basename "$f" .yml)
+  {
+    echo "apiVersion: monitoring.coreos.com/v1"
+    echo "kind: PrometheusRule"
+    echo "metadata:"
+    echo "  name: ${rule_name}"
+    echo "  namespace: obs-metrics"
+    echo "spec:"
+    sed 's/^/  /' "$f"
+  } | kubectl apply -f -
+done
+
+# Per-project rules from alerting/projects/<name>.yml — same wrapping
+if [[ -d ../alerting/projects ]]; then
+  for f in ../alerting/projects/*.yml; do
+    [[ -f $f ]] || continue
+    rule_name="proj-$(basename "$f" .yml)"
+    {
+      echo "apiVersion: monitoring.coreos.com/v1"
+      echo "kind: PrometheusRule"
+      echo "metadata:"
+      echo "  name: ${rule_name}"
+      echo "  namespace: obs-metrics"
+      echo "spec:"
+      sed 's/^/  /' "$f"
+    } | kubectl apply -f -
+  done
+fi
 
 echo "==> Done. Verify NodePorts (see ../docs/network-topology.md)."
