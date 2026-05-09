@@ -60,16 +60,16 @@ alertmanager:
               receiver: platform-critical
         - matchers:
             - environment = "production"
-              severity = "critical"
+            - severity = "critical"
           receiver: team-prod-critical
           group_wait: 10s
         - matchers:
             - environment = "production"
-              severity = "warning"
+            - severity = "warning"
           receiver: team-prod-warning
         - matchers:
             - environment = "staging"
-              severity = "critical"
+            - severity = "critical"
           receiver: team-staging-warning
 
     inhibit_rules:
