@@ -130,14 +130,41 @@ kubectl create configmap loki-rules \
 # Helm releases
 # ──────────────────────────────────────────────────────────────────
 echo "==> MinIO"
-MINIO_LOKI_SK=$(yq -r '.minioUsers.loki.secretKey' minio/values.secrets.local.yaml)
-MINIO_HARBOR_SK=$(yq -r '.minioUsers.harbor.secretKey' minio/values.secrets.local.yaml)
 helm upgrade --install minio minio/minio \
   -n obs-storage \
   -f minio/values.yaml \
-  --set "users[0].secretKey=${MINIO_LOKI_SK}" \
-  --set "users[1].secretKey=${MINIO_HARBOR_SK}" \
   --wait
+
+# Bootstrap MinIO users + buckets via `mc` inside the pod.
+# We do this explicitly because the chart's `users:` / `buckets:` blocks rely on a
+# post-install Job that is flaky (silently fails / runs before MinIO is reachable).
+# Idempotent: re-runs ignore "already exists" errors.
+echo "==> MinIO users + buckets (mc exec)"
+MINIO_LOKI_SK=$(yq -r '.minioUsers.loki.secretKey' minio/values.secrets.local.yaml)
+MINIO_HARBOR_SK=$(yq -r '.minioUsers.harbor.secretKey' minio/values.secrets.local.yaml)
+
+kubectl -n obs-storage wait --for=condition=ready pod -l release=minio --timeout=180s
+
+MINIO_POD=$(kubectl -n obs-storage get pod -l release=minio -o jsonpath='{.items[0].metadata.name}')
+kubectl -n obs-storage exec -i "${MINIO_POD}" -- env \
+  ROOT_USER="${MINIO_ROOT_USER}" \
+  ROOT_PASS="${MINIO_ROOT_PASSWORD}" \
+  LOKI_SK="${MINIO_LOKI_SK}" \
+  HARBOR_SK="${MINIO_HARBOR_SK}" \
+  bash -e <<'EOF'
+mc alias set local http://localhost:9000 "$ROOT_USER" "$ROOT_PASS"
+mc admin user add    local loki   "$LOKI_SK"   2>/dev/null || true
+mc admin user add    local harbor "$HARBOR_SK" 2>/dev/null || true
+mc admin policy attach local readwrite --user loki   2>/dev/null || true
+mc admin policy attach local readwrite --user harbor 2>/dev/null || true
+for b in loki-chunks loki-ruler loki-admin harbor-blobs; do
+  mc mb -p "local/$b" 2>/dev/null || true
+done
+echo "--- MinIO users ---"
+mc admin user ls local
+echo "--- MinIO buckets ---"
+mc ls local
+EOF
 
 echo "==> Loki"
 helm upgrade --install loki grafana/loki \

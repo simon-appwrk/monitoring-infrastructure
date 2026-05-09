@@ -32,27 +32,10 @@ consoleService:
   port: 9001
   nodePort: 30901
 
-# Pre-create the buckets Loki + Harbor need
-buckets:
-  - name: loki-chunks
-    policy: none
-    purge: false
-  - name: loki-ruler
-    policy: none
-    purge: false
-  - name: loki-admin
-    policy: none
-    purge: false
-  - name: harbor-blobs
-    policy: none
-    purge: false
-
-# Pre-create access keys. Secrets come from values.secrets.local.yaml (see merge in install.sh).
-# DO NOT put real secret keys here.
-users:
-  - accessKey: loki
-    secretKey: CHANGEME-overridden-by-secrets-file
-    policy: readwrite
-  - accessKey: harbor
-    secretKey: CHANGEME-overridden-by-secrets-file
-    policy: readwrite
+# NOTE: users + buckets are NOT created by the chart's `users:` / `buckets:` blocks.
+# The chart's post-install Job for those is unreliable. install.sh runs `mc admin user add`
+# and `mc mb` via `kubectl exec` after MinIO is up — see the "MinIO users + buckets" step.
+#
+# Buckets created:  loki-chunks, loki-ruler, loki-admin, harbor-blobs
+# Users created:    loki (readwrite), harbor (readwrite)
+# Secret keys come from k8s/minio/values.secrets.local.yaml :: minioUsers.{loki,harbor}.secretKey
