@@ -87,12 +87,8 @@ GF_OIDC=$(yq -r '.grafanaOidc.clientSecret' grafana/values.secrets.local.yaml)
 apply_secret grafana-oidc obs-metrics \
   "--from-literal=GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${GF_OIDC}"
 
-# loki-minio  ← loki/values.secrets.local.yaml :: lokiMinio
-LOKI_AK=$(yq -r '.lokiMinio.accessKey' loki/values.secrets.local.yaml)
-LOKI_SK=$(yq -r '.lokiMinio.secretKey' loki/values.secrets.local.yaml)
-apply_secret loki-minio obs-logs \
-  "--from-literal=MINIO_ACCESS_KEY=${LOKI_AK}" \
-  "--from-literal=MINIO_SECRET_KEY=${LOKI_SK}"
+# Loki S3 creds: no Secret needed — values.secrets.local.yaml is passed to Helm directly
+# as a -f overlay (see "Loki" install step below).
 
 # harbor-admin + harbor-database
 HARBOR_ADMIN=$(yq -r '.harborAdmin.password' harbor/values.secrets.local.yaml)
@@ -168,7 +164,10 @@ EOF
 
 echo "==> Loki"
 helm upgrade --install loki grafana/loki \
-  -n obs-logs -f loki/values.yaml --wait
+  -n obs-logs \
+  -f loki/values.yaml \
+  -f loki/values.secrets.local.yaml \
+  --timeout 10m --wait
 
 echo "==> kube-prometheus-stack"
 helm upgrade --install kps prometheus-community/kube-prometheus-stack \

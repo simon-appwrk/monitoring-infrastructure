@@ -49,10 +49,9 @@ loki:
     s3:
       endpoint: minio.obs-storage.svc:9000
       region: us-east-1
-      # Credentials come from Secret "loki-minio" via env (see extraEnvFrom below).
-      # Loki expands ${VAR} when started with -config.expand-env=true (set automatically by chart).
-      accessKeyId: ${MINIO_ACCESS_KEY}
-      secretAccessKey: ${MINIO_SECRET_KEY}
+      # accessKeyId + secretAccessKey come from values.secrets.local.yaml (Helm -f overlay).
+      # We do NOT use env-var expansion because the loki chart doesn't reliably set
+      # -config.expand-env=true on the binary.
       s3ForcePathStyle: true
       insecure: true
 
@@ -77,11 +76,6 @@ loki:
       local:
         directory: /var/loki/rules
     rule_path: /var/loki/rules-temp
-
-# Inject MinIO creds for the s3 storage block
-extraEnvFrom:
-  - secretRef:
-      name: loki-minio
 
 # Mount log-based alert rules from the loki-rules ConfigMap
 extraVolumes:
