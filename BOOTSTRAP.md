@@ -116,7 +116,7 @@ vim alertmanager-webhooks.yaml
 > Generate strong passwords with `openssl rand -base64 32`.
 
 > [!IMPORTANT]
-> **Cross-file consistency:** `loki-s3.yaml :: AWS_SECRET_ACCESS_KEY` is the password for the MinIO user `loki` you'll create in Step 6. Pick a value here and remember it (or just look it up via `kubectl get secret` later).
+> **Cross-file consistency:** `loki-s3.yaml :: MINIO_SECRET_KEY` is the password for the MinIO user `loki` you'll create in Step 6. Pick a value here and remember it (or just look it up via `kubectl get secret` later).
 
 ### 3c. Apply all
 
@@ -259,8 +259,8 @@ kubectl -n obs-storage wait --for=condition=ready pod -l release=minio --timeout
 # Pull the values from the K8s Secrets you applied in Step 3
 ROOT_USER=$(kubectl -n obs-storage get secret minio-root -o jsonpath='{.data.rootUser}' | base64 -d)
 ROOT_PASS=$(kubectl -n obs-storage get secret minio-root -o jsonpath='{.data.rootPassword}' | base64 -d)
-LOKI_AK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.AWS_ACCESS_KEY_ID}'     | base64 -d)
-LOKI_SK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+LOKI_AK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.MINIO_ACCESS_KEY}' | base64 -d)
+LOKI_SK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.MINIO_SECRET_KEY}' | base64 -d)
 
 MINIO_POD=$(kubectl -n obs-storage get pod -l release=minio -o jsonpath='{.items[0].metadata.name}')
 

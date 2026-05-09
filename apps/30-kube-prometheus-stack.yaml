@@ -26,6 +26,14 @@ spec:
     server: https://kubernetes.default.svc
     namespace: obs-metrics
 
+  # Ignore cosmetic diffs the K8s API server normalizes away.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[].apiVersion
+        - .spec.volumeClaimTemplates[].kind
+
   syncPolicy:
     automated:
       prune: true

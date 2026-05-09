@@ -24,6 +24,15 @@ spec:
     server: https://kubernetes.default.svc
     namespace: obs-registry
 
+  # Ignore cosmetic diffs the K8s API server normalizes away.
+  # Without this, every Harbor StatefulSet shows "OutOfSync" forever — pure noise.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[].apiVersion
+        - .spec.volumeClaimTemplates[].kind
+
   syncPolicy:
     automated:
       prune: true

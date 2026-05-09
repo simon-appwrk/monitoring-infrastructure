@@ -159,6 +159,14 @@ prometheus:
     externalLabels:
       cluster: central
 
+    # External scrape targets (VPS / EC2 / Docker hosts) live in a Secret applied
+    # manually on the server — host IPs never enter Git.
+    # See secrets/additional-scrape-configs.yaml.example for the template.
+    additionalScrapeConfigsSecret:
+      enabled: true
+      name: additional-scrape-configs
+      key: prometheus-additional.yaml
+
 # ────────────────────────────────────────────────────────────────────
 # Components
 # ────────────────────────────────────────────────────────────────────

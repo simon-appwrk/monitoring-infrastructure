@@ -435,11 +435,11 @@ Trickier because both Loki AND MinIO need to be updated:
 
 ```bash
 # 1. Update the K8s Secret
-vim ~/monitoring-infrastructure/secrets/loki-s3.yaml          # new AWS_SECRET_ACCESS_KEY
+vim ~/monitoring-infrastructure/secrets/loki-s3.yaml          # new MINIO_SECRET_KEY
 kubectl apply -f ~/monitoring-infrastructure/secrets/loki-s3.yaml
 
 # 2. Update the MinIO user with the same new key
-NEW_SK=$(kubectl -n obs-logs get secret loki-s3 -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+NEW_SK=$(kubectl -n obs-logs get secret loki-s3 -o jsonpath='{.data.MINIO_SECRET_KEY}' | base64 -d)
 ROOT_USER=$(kubectl -n obs-storage get secret minio-root -o jsonpath='{.data.rootUser}' | base64 -d)
 ROOT_PASS=$(kubectl -n obs-storage get secret minio-root -o jsonpath='{.data.rootPassword}' | base64 -d)
 MINIO_POD=$(kubectl -n obs-storage get pod -l release=minio -o jsonpath='{.items[0].metadata.name}')

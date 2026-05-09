@@ -1,6 +1,7 @@
 # Loki — SingleBinary mode for single-node k3s.
 # Retention: 7 days. Chunks live in MinIO.
-# S3 credentials come from Secret "loki-s3" via env (AWS SDK reads AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY natively).
+# MinIO credentials come from Secret "loki-s3" as MINIO_ACCESS_KEY / MINIO_SECRET_KEY env vars.
+# Loki substitutes ${MINIO_ACCESS_KEY} / ${MINIO_SECRET_KEY} into its config via -config.expand-env=true.
 
 deploymentMode: SingleBinary
 
@@ -16,10 +17,23 @@ singleBinary:
     enabled: true
     size: 5Gi
     storageClass: local-path
-  # AWS SDK reads these env vars automatically — no ${VAR} expansion needed.
-  extraEnvFrom:
-    - secretRef:
-        name: loki-s3
+  # Tell Loki to expand ${VAR} in its config file at startup.
+  # Without this flag, Loki would send the literal string "${MINIO_ACCESS_KEY}" to MinIO.
+  extraArgs:
+    - -config.expand-env=true
+  # Inject MinIO credentials as env vars from Secret loki-s3.
+  # These names are arbitrary — what matters is they match the ${...} refs in loki.storage.s3.
+  extraEnv:
+    - name: MINIO_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: loki-s3
+          key: MINIO_ACCESS_KEY
+    - name: MINIO_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: loki-s3
+          key: MINIO_SECRET_KEY
   # Mount log-based alert rules (rules ConfigMap is created by apps/61-loki-ruler.yaml)
   extraVolumes:
     - name: loki-rules
@@ -59,9 +73,12 @@ loki:
     s3:
       endpoint: minio.obs-storage.svc:9000
       region: us-east-1
+      # ${...} is expanded by Loki at startup because singleBinary.extraArgs has
+      # -config.expand-env=true. Env vars come from singleBinary.extraEnv (Secret loki-s3).
+      accessKeyId: ${MINIO_ACCESS_KEY}
+      secretAccessKey: ${MINIO_SECRET_KEY}
       s3ForcePathStyle: true
       insecure: true
-      # No accessKeyId / secretAccessKey here — the AWS SDK picks them up from env vars.
 
   limits_config:
     retention_period: 168h        # 7 days
@@ -121,3 +138,21 @@ chunksCache:
   enabled: false
 resultsCache:
   enabled: false
+
+# Loki Canary is a self-test pod that constantly tails Loki and reports if data is missing.
+# Useful in production-scale deployments; just noise on a single-node setup.
+lokiCanary:
+  enabled: false
+
+# Test pods (run only when you `helm test`) — disable to keep the cluster cleaner
+test:
+  enabled: false
+
+# Don't try to install/upgrade monitoring rules into our existing Prometheus
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  lokiCanary:
+    enabled: false

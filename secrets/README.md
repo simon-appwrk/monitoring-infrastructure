@@ -60,7 +60,7 @@ done
 
 # 2. Edit each — replace every CHANGEME
 vim minio-root.yaml          # rootPassword
-vim loki-s3.yaml             # AWS_SECRET_ACCESS_KEY (becomes the MinIO 'loki' user's password)
+vim loki-s3.yaml             # MINIO_SECRET_KEY (becomes the MinIO 'loki' user's password)
 vim grafana-admin.yaml       # admin-password
 vim grafana-oidc.yaml        # placeholder OK if Keycloak isn't ready
 vim harbor-admin.yaml        # HARBOR_ADMIN_PASSWORD
@@ -75,7 +75,7 @@ bash apply.sh
 > Generate strong passwords: `openssl rand -base64 32`
 
 > [!CAUTION]
-> **Cross-file consistency required:** the `AWS_SECRET_ACCESS_KEY` in `loki-s3.yaml` MUST equal the password you'll give to the MinIO `loki` user (next step). Pick a value, use it in both places.
+> **Cross-file consistency required:** the `MINIO_SECRET_KEY` in `loki-s3.yaml` MUST equal the password you'll give to the MinIO `loki` user (next step). Pick a value, use it in both places.
 
 ---
 
@@ -86,8 +86,8 @@ The MinIO Helm chart's user-creation Job is unreliable. We create the `loki` use
 ```bash
 ROOT_USER=$(kubectl -n obs-storage get secret minio-root -o jsonpath='{.data.rootUser}' | base64 -d)
 ROOT_PASS=$(kubectl -n obs-storage get secret minio-root -o jsonpath='{.data.rootPassword}' | base64 -d)
-LOKI_AK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.AWS_ACCESS_KEY_ID}'     | base64 -d)
-LOKI_SK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+LOKI_AK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.MINIO_ACCESS_KEY}' | base64 -d)
+LOKI_SK=$(kubectl -n obs-logs    get secret loki-s3     -o jsonpath='{.data.MINIO_SECRET_KEY}' | base64 -d)
 
 MINIO_POD=$(kubectl -n obs-storage get pod -l release=minio -o jsonpath='{.items[0].metadata.name}')
 
