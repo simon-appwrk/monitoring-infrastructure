@@ -1,0 +1,58 @@
+# ArgoCD Helm values. Sized for single-node k3s; exposed via NodePort 30040.
+
+global:
+  domain: argocd.example.com    # used in generated URLs; replace with your cloudflared hostname
+
+configs:
+  params:
+    # Run server in HTTP mode — TLS terminates at cloudflared at the edge
+    server.insecure: true
+
+server:
+  service:
+    type: NodePort
+    nodePortHttp: 30040
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+controller:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+applicationSet:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+dex:
+  enabled: false   # we don't use the bundled dex — local admin login is enough
+
+notifications:
+  enabled: false
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi

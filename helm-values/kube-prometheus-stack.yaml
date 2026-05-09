@@ -1,0 +1,209 @@
+# kube-prometheus-stack — Prometheus + Alertmanager + node-exporter + kube-state-metrics
+# Sized for single-node k3s. Retention: 15d.
+# Grafana is installed separately so we own its values cleanly.
+
+grafana:
+  enabled: false
+
+# ────────────────────────────────────────────────────────────────────
+# Alertmanager
+# ────────────────────────────────────────────────────────────────────
+alertmanager:
+  service:
+    type: NodePort
+    nodePort: 30093
+
+  alertmanagerSpec:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+    # Mount the alertmanager-webhooks Secret at /etc/alertmanager/secrets/alertmanager-webhooks/
+    secrets:
+      - alertmanager-webhooks
+
+  config:
+    global:
+      resolve_timeout: 5m
+      smtp_from: alerts@example.com
+      smtp_smarthost: smtp.example.com:587
+      smtp_auth_username: alerts@example.com
+      smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-webhooks/smtp-password
+      smtp_require_tls: true
+
+    route:
+      receiver: unrouted-catchall
+      group_by: ['alertname', 'project', 'environment']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - matchers: [severity = "info"]
+          receiver: 'null'
+        - matchers: [team = "unrouted"]
+          receiver: platform-slack
+        - matchers: [project = "infra"]
+          receiver: platform-slack
+          routes:
+            - matchers: [severity = "critical"]
+              receiver: platform-critical
+        - matchers:
+            - environment = "production"
+              severity = "critical"
+          receiver: team-prod-critical
+          group_wait: 10s
+        - matchers:
+            - environment = "production"
+              severity = "warning"
+          receiver: team-prod-warning
+        - matchers:
+            - environment = "staging"
+              severity = "critical"
+          receiver: team-staging-warning
+
+    inhibit_rules:
+      - source_matchers: [alertname = "NodeDown"]
+        target_matchers: [alertname =~ "Container.*|App.*|.*Down"]
+        equal: [instance]
+
+    receivers:
+      - name: 'null'
+      - name: unrouted-catchall
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+            channel: '#obs-platform'
+            title: '[UNROUTED] {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}*{{ .Labels.alertname }}* — {{ .Annotations.summary }}{{ end }}'
+            send_resolved: true
+      - name: platform-slack
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+            channel: '#infra-oncall'
+            title: '[{{ .CommonLabels.severity }}] {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}{{ end }}'
+            send_resolved: true
+      - name: platform-critical
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+            channel: '#infra-oncall'
+            title: ':rotating_light: CRITICAL — {{ .GroupLabels.alertname }}'
+            send_resolved: true
+        email_configs:
+          - to: oncall@example.com
+            send_resolved: true
+      - name: team-prod-critical
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+            channel: '#alerts-{{ .CommonLabels.team }}'
+            title: ':rotating_light: PROD CRITICAL — {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}*{{ .Labels.project }}/{{ .Labels.environment }}*\n{{ .Annotations.summary }}\n{{ .Annotations.description }}\n<{{ .GeneratorURL }}|graph>{{ end }}'
+            send_resolved: true
+        email_configs:
+          - to: '{{ .CommonLabels.team }}@example.com'
+            send_resolved: true
+      - name: team-prod-warning
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+            channel: '#alerts-{{ .CommonLabels.team }}'
+            title: ':warning: PROD — {{ .GroupLabels.alertname }}'
+            send_resolved: true
+      - name: team-staging-warning
+        slack_configs:
+          - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+            channel: '#alerts-{{ .CommonLabels.team }}-staging'
+            title: '[staging] {{ .GroupLabels.alertname }}'
+            send_resolved: true
+
+# ────────────────────────────────────────────────────────────────────
+# Prometheus
+# ────────────────────────────────────────────────────────────────────
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30090
+
+  prometheusSpec:
+    replicas: 1
+    retention: 15d
+    retentionSize: "20GB"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 25Gi
+
+    # Pick up any PrometheusRule in any namespace (Operator default would be too narrow)
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelectorNilUsesHelmValues: false
+
+    externalLabels:
+      cluster: central
+
+# ────────────────────────────────────────────────────────────────────
+# Components
+# ────────────────────────────────────────────────────────────────────
+nodeExporter:
+  enabled: true
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
+kubeStateMetrics:
+  enabled: true
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      memory: 200Mi
+
+# k3s doesn't expose these on standard endpoints — disable to avoid noisy "down" alerts
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+
+defaultRules:
+  create: true
+  rules:
+    etcd: false
+    kubeApiserverSlos: false
+    kubeProxy: false
+    kubeScheduler: false

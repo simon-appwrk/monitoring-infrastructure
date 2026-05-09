@@ -1,62 +1,101 @@
-# Observability & Container Platform
+# Monitoring Infrastructure
 
-Centralized monitoring, logging, alerting, and container registry for ~15 projects across cloud VMs, VPS servers, Docker hosts, and Kubernetes workloads.
+A self-hosted observability and container registry stack for ~15 projects, deployed automatically by **ArgoCD** from this Git repository.
 
-Designed for a **single-node k3s** server, exposed via **NodePort**, fronted by **cloudflared tunnel** for external access. Identity via **Keycloak**.
+> [!NOTE]
+> **New to DevOps or Kubernetes?** Start with [docs/concepts.md](docs/concepts.md) — it explains what every piece of the puzzle is (Kubernetes, k3s, ArgoCD, Helm, GitOps) in plain English, then come back here.
 
-## Stack
+---
 
-| Layer        | Component       | Purpose                                       |
-|--------------|-----------------|-----------------------------------------------|
-| Metrics      | Prometheus      | Scrape + store metrics (15d retention)        |
-| Visualization| Grafana         | Dashboards, per-project access                |
-| Alerting     | Alertmanager    | Route alerts to Email/Slack/Discord/Telegram  |
-| Logs         | Loki            | Centralized log store (7d retention)          |
-| Log shipping | Promtail        | Agent on VMs / Docker hosts / K8s             |
-| Object store | MinIO           | Loki chunks + Harbor blobs (no backup — acceptable loss) |
-| Registry     | Harbor          | Private images, scanning, RBAC, retention     |
+## What this gives you
 
-## Layout
+| Need                                             | Tool                                              |
+|--------------------------------------------------|---------------------------------------------------|
+| Collect metrics from servers + apps              | **Prometheus** (15-day retention)                 |
+| Collect logs from servers + apps                 | **Loki** + **Promtail** (7-day retention)         |
+| See dashboards + search logs                     | **Grafana**                                       |
+| Get alerts in Slack/Email when something breaks  | **Alertmanager**                                  |
+| Store Docker images privately                    | **Harbor**                                        |
+| Object storage for log chunks                    | **MinIO**                                         |
+| Deploy + auto-update everything from Git         | **ArgoCD**                                        |
+
+All of this runs on **one Linux server** with k3s (a lightweight Kubernetes), exposed to the outside world through a **Cloudflare tunnel** (no public ports needed on your server).
+
+---
+
+## Who this is for
+
+| If you are…                              | Read this first                                |
+|------------------------------------------|------------------------------------------------|
+| New to Kubernetes or GitOps              | [docs/concepts.md](docs/concepts.md)           |
+| Just want to install it                  | [BOOTSTRAP.md](BOOTSTRAP.md)                   |
+| Operating a running install              | [docs/runbook.md](docs/runbook.md)             |
+| Curious how the pieces fit together      | [docs/architecture.md](docs/architecture.md)   |
+| Looking up a term you don't know         | [docs/glossary.md](docs/glossary.md)           |
+| Adding a new server to be monitored      | [agents/README.md](agents/README.md)           |
+| Onboarding a new project (16th, 17th, …) | [examples/project-onboarding/](examples/project-onboarding/) |
+
+---
+
+## How it works (the big picture)
+
+```mermaid
+flowchart LR
+    Dev["You<br/>(edit YAML files)"] -->|git push| GH[GitHub repo]
+    GH -.->|polls every 3 min| Argo[ArgoCD<br/>running in k3s]
+    Argo -->|installs / updates| K8s[Kubernetes workloads<br/>Prometheus, Loki, Grafana,<br/>Harbor, MinIO]
+    K8s --> Users["Users<br/>(via Cloudflare tunnel)"]
+```
+
+Translation: **you change a file in Git, push, and a few minutes later it's live on your server.** No SSH, no `kubectl apply`, no manual Helm commands.
+
+---
+
+## Repository layout
 
 ```
-docs/        Architecture, RBAC, alerting, runbook, rollout
-k8s/         Central stack (Helm values + manifests, NodePort)
-  <comp>/values.yaml                  ← committed, public
-  <comp>/values.secrets.example.yaml  ← committed, dummy values
-  <comp>/values.secrets.local.yaml    ← GITIGNORED, real secrets (you create on the server)
-agents/      Per-host bundles: docker-compose, systemd, ansible, k8s daemonset
-alerting/    Prometheus + Loki rules
-dashboards/  Grafana JSON dashboards
-examples/    Project onboarding template + snippets (PM2, etc.)
+.
+├── README.md              ← you are here
+├── BOOTSTRAP.md           ← first-time install walkthrough
+│
+├── bootstrap/             ← scripts + manifest to install ArgoCD itself
+├── apps/                  ← one ArgoCD "Application" per workload (declares: deploy this Helm chart with these values)
+├── helm-values/           ← the actual Helm values for each chart (Prometheus, Grafana, etc.)
+├── manifests/             ← raw Kubernetes manifests (namespaces, ConfigMaps)
+├── alerting/              ← Prometheus alert rules (PrometheusRule CRDs)
+├── secrets/               ← templates for credentials — real values are filled in on the server, never committed
+│
+├── agents/                ← what to install on the servers being monitored
+├── examples/              ← copy-paste snippets (PM2 logs, project onboarding)
+├── dashboards/            ← Grafana JSON dashboards
+└── docs/                  ← architecture, runbook, concepts, glossary
 ```
 
-## Secrets workflow
+> [!TIP]
+> The directory you'll touch the most is **`helm-values/`** — that's where you tune Prometheus retention, Loki resource limits, etc. Edit a file, `git push`, ArgoCD does the rest.
 
-Real secrets never enter git. The pattern, applied to every component that needs them:
+---
 
-1. Each component ships `values.secrets.example.yaml` with placeholder `CHANGEME` values — committed.
-2. On the server, you copy that to `values.secrets.local.yaml` and fill in real values.
-3. `install.sh` passes both files to Helm: `-f values.yaml -f values.secrets.local.yaml`.
-4. `*.secrets.local.yaml` is in `.gitignore` and will never be committed.
+## Get started
 
-The same pattern applies to raw K8s Secret manifests under `k8s/alertmanager/` (webhook URLs).
+→ **[BOOTSTRAP.md](BOOTSTRAP.md)** — first-time install on a fresh k3s node. Allow ~30 minutes.
 
-## Read in this order
+After that, day-to-day looks like:
 
-1. [docs/architecture.md](docs/architecture.md) — what runs where, data flow
-2. [docs/network-topology.md](docs/network-topology.md) — NodePort assignments + cloudflared layout
-3. [docs/access-control.md](docs/access-control.md) — admin vs. developer RBAC model
-4. [docs/rollout-plan.md](docs/rollout-plan.md) — phased rollout
-5. [k8s/README.md](k8s/README.md) — install central stack (with secrets workflow)
-6. [agents/README.md](agents/README.md) — onboard a host
-7. [examples/project-onboarding/README.md](examples/project-onboarding/README.md) — onboard project #N
+```bash
+vim helm-values/loki.yaml      # change something
+git commit -am "loki: bump retention to 14d"
+git push                       # ✨ ArgoCD reconciles, you're done
+```
 
-## Resource fit
+---
 
-The single-node target is **7.7Gi RAM / 116Gi disk**. With current sizing the stack uses ~6–7Gi RAM at steady state. If you hit OOM:
+## Repo URL — change if you fork
 
-- Disable Harbor Trivy scanner (saves ~512Mi): `trivy.enabled: false` in [k8s/harbor/values.yaml](k8s/harbor/values.yaml).
-- Drop Loki retention to 3d.
-- Drop Prometheus retention to 7d.
+All ArgoCD Applications point at:
 
-If you outgrow the box, scale Harbor off first — it's the heaviest component and the most independent.
+```
+https://github.com/simon-appwrk/monitoring-infrastructure
+```
+
+If you fork, search-and-replace this URL across [bootstrap/root-app.yaml](bootstrap/root-app.yaml) and [apps/*.yaml](apps/).

@@ -1,0 +1,32 @@
+# App-of-apps: a single ArgoCD Application that watches `apps/` in this repo.
+# Every file in apps/*.yaml becomes a child Application managed by ArgoCD.
+#
+# Apply once: kubectl apply -f bootstrap/root-app.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/simon-appwrk/monitoring-infrastructure
+    targetRevision: main
+    path: apps
+    directory:
+      recurse: false
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

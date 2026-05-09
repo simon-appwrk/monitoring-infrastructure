@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: obs-metrics
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: obs-logs
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: obs-storage
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: obs-registry

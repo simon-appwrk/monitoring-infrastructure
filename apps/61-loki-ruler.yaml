@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki-ruler
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "60"
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/simon-appwrk/monitoring-infrastructure
+    targetRevision: main
+    path: manifests
+    directory:
+      include: loki-rules-configmap.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: obs-logs
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

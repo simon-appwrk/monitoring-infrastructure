@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alerting-rules
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "60"
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/simon-appwrk/monitoring-infrastructure
+    targetRevision: main
+    path: alerting
+    directory:
+      recurse: false
+      include: '*.yaml'
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: obs-metrics
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

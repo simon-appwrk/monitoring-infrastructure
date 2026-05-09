@@ -1,0 +1,81 @@
+# Grafana — single-node k3s. NodePort 30030.
+
+service:
+  type: NodePort
+  nodePort: 30030
+
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClassName: local-path
+
+# Admin credentials from Secret "grafana-admin" (applied manually — see secrets/)
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+
+grafana.ini:
+  server:
+    root_url: https://grafana.example.com   # TODO: replace with cloudflared hostname
+  auth:
+    disable_login_form: false
+    oauth_auto_login: false
+  auth.generic_oauth:
+    # Flip to true once Keycloak is ready AND grafana-oidc Secret exists
+    enabled: false
+    name: Keycloak
+    client_id: grafana
+    scopes: openid profile email groups
+    auth_url: https://auth.example.com/realms/main/protocol/openid-connect/auth
+    token_url: https://auth.example.com/realms/main/protocol/openid-connect/token
+    api_url: https://auth.example.com/realms/main/protocol/openid-connect/userinfo
+    role_attribute_path: contains(groups[*], 'obs-admins') && 'Admin' || 'Viewer'
+    allow_assign_grafana_admin: true
+    allow_sign_up: true
+  users:
+    viewers_can_edit: false
+  explore:
+    enabled: false
+  log:
+    mode: console
+
+# When OIDC is enabled, Grafana reads GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET from this Secret
+envFromSecret: grafana-oidc
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://kps-kube-prometheus-stack-prometheus.obs-metrics.svc:9090
+        isDefault: true
+        editable: false
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki-gateway.obs-logs.svc:80
+        editable: false
+        jsonData:
+          maxLines: 5000
+
+# Sidecar picks up dashboards from any ConfigMap with this label
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    folderAnnotation: grafana_folder
+    provider:
+      foldersFromFilesStructure: true
+  datasources:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi

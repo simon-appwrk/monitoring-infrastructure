@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-rules
+  namespace: obs-logs
+data:
+  rules.yaml: |
+    groups:
+      - name: log-patterns
+        rules:
+
+          - alert: LogPanicLine
+            expr: |
+              sum by(project, environment, team, service) (
+                count_over_time({environment="production"} |~ "(?i)panic:|fatal error:" [5m])
+              ) > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Panic/fatal log line in {{ $labels.project }}/{{ $labels.service }}"
+              description: "{{ $value }} panic/fatal lines in the last 5m."
+
+          - alert: LogErrorRateSpike
+            expr: |
+              (
+                sum by(project, environment, team, service) (
+                  rate({environment="production"} |~ "(?i)\\bERROR\\b" [5m])
+                )
+                >
+                10 * (
+                  sum by(project, environment, team, service) (
+                    rate({environment="production"} |~ "(?i)\\bERROR\\b" [1h] offset 1h)
+                  )
+                )
+              )
+              and
+              sum by(project, environment, team, service) (rate({environment="production"} |~ "(?i)\\bERROR\\b" [5m])) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Error log rate spike in {{ $labels.project }}/{{ $labels.service }}"
+              description: "Error rate is >10x its hourly baseline."
+
+          - alert: LogAuthFailureBurst
+            expr: |
+              sum by(project, environment, team) (
+                count_over_time({job=~"system|journal"} |~ "(?i)authentication failure|failed password" [5m])
+              ) > 50
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Auth failure burst on {{ $labels.project }}"
+              description: "{{ $value }} auth failures in 5m — possible brute force."

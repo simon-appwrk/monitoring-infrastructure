@@ -1,0 +1,130 @@
+# Harbor — single-node k3s. TLS terminated by cloudflared (HTTP NodePort 30002).
+# Image blobs live on a local PVC (no MinIO dependency — simpler).
+
+expose:
+  type: nodePort
+  tls:
+    enabled: false           # cloudflared handles TLS at the edge
+  nodePort:
+    name: harbor
+    ports:
+      http:
+        port: 80
+        nodePort: 30002
+
+externalURL: https://harbor.example.com    # TODO: replace with cloudflared hostname
+
+# Admin password from Secret "harbor-admin"
+existingSecretAdminPassword: harbor-admin
+existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
+
+# Internal Postgres (single-node — acceptable for this scale)
+database:
+  type: internal
+  internal:
+    existingSecret: harbor-database
+    existingSecretKey: POSTGRES_PASSWORD
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+redis:
+  type: internal
+  internal:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+# Image blobs on local PVC (no MinIO)
+persistence:
+  enabled: true
+  imageChartStorage:
+    type: filesystem
+    filesystem:
+      rootdirectory: /storage
+  persistentVolumeClaim:
+    registry:
+      size: 20Gi
+      storageClass: local-path
+    chartmuseum:
+      size: 5Gi
+      storageClass: local-path
+    database:
+      size: 10Gi
+      storageClass: local-path
+    redis:
+      size: 5Gi
+      storageClass: local-path
+    jobservice:
+      jobLog:
+        size: 5Gi
+        storageClass: local-path
+
+# Trivy: vulnerability scanner. ~512Mi RAM. Disable if memory pressure.
+trivy:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+notary:
+  enabled: false
+
+core:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+jobservice:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+registry:
+  replicas: 1
+  registry:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  controller:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+portal:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+metrics:
+  enabled: true
+
+# OIDC configured post-install via the UI (Administration → Configuration → Authentication).

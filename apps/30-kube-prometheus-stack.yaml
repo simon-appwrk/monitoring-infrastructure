@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+spec:
+  project: default
+
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 65.5.0
+      helm:
+        releaseName: kps
+        valueFiles:
+          - $values/helm-values/kube-prometheus-stack.yaml
+        # CRDs are big — install via Server-Side Apply
+        skipCrds: false
+    - repoURL: https://github.com/simon-appwrk/monitoring-infrastructure
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: obs-metrics
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true     # CRDs may not exist on first apply
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        maxDuration: 10m

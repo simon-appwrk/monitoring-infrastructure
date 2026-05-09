@@ -1,0 +1,123 @@
+# Loki — SingleBinary mode for single-node k3s.
+# Retention: 7 days. Chunks live in MinIO.
+# S3 credentials come from Secret "loki-s3" via env (AWS SDK reads AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY natively).
+
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: local-path
+  # AWS SDK reads these env vars automatically — no ${VAR} expansion needed.
+  extraEnvFrom:
+    - secretRef:
+        name: loki-s3
+  # Mount log-based alert rules (rules ConfigMap is created by apps/61-loki-ruler.yaml)
+  extraVolumes:
+    - name: loki-rules
+      configMap:
+        name: loki-rules
+  extraVolumeMounts:
+    - name: loki-rules
+      mountPath: /var/loki/rules/fake     # 'fake' = default tenant in single-tenant mode
+
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  schemaConfig:
+    configs:
+      - from: "2025-01-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  storage:
+    type: s3
+    bucketNames:
+      chunks: loki-chunks
+      ruler: loki-ruler
+      admin: loki-admin
+    s3:
+      endpoint: minio.obs-storage.svc:9000
+      region: us-east-1
+      s3ForcePathStyle: true
+      insecure: true
+      # No accessKeyId / secretAccessKey here — the AWS SDK picks them up from env vars.
+
+  limits_config:
+    retention_period: 168h        # 7 days
+    ingestion_rate_mb: 8
+    ingestion_burst_size_mb: 16
+    max_query_series: 5000
+    max_query_parallelism: 16
+
+  compactor:
+    retention_enabled: true
+    delete_request_store: s3
+
+  ruler:
+    enable_api: true
+    enable_alertmanager_v2: true
+    alertmanager_url: http://kps-kube-prometheus-stack-alertmanager.obs-metrics.svc:9093
+    storage:
+      type: local
+      local:
+        directory: /var/loki/rules
+    rule_path: /var/loki/rules-temp
+
+# Gateway = nginx fronting Loki. Push (write) on NodePort 30100.
+gateway:
+  enabled: true
+  replicas: 1
+  service:
+    type: NodePort
+    nodePort: 30100
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# Second NodePort Service for the read path (Grafana queries via in-cluster URL,
+# so this is only useful for ad-hoc operator access)
+extraObjects:
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: loki-query
+      namespace: obs-logs
+    spec:
+      type: NodePort
+      selector:
+        app.kubernetes.io/name: loki
+        app.kubernetes.io/component: single-binary
+      ports:
+        - name: http
+          port: 3100
+          targetPort: 3100
+          nodePort: 30101
+
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false

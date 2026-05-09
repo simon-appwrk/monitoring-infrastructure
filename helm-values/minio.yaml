@@ -1,0 +1,35 @@
+# MinIO — standalone mode for single-node k3s.
+# Used only by Loki for chunk storage. Harbor uses its own PVC (not MinIO).
+# No backup of buckets (acceptable loss on rebuild).
+
+mode: standalone
+replicas: 1
+
+# Root credentials from Secret "minio-root" (applied manually — see secrets/)
+existingSecret: minio-root
+
+persistence:
+  enabled: true
+  size: 30Gi
+  storageClass: local-path
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+service:
+  type: NodePort
+  port: 9000
+  nodePort: 30900
+
+consoleService:
+  type: NodePort
+  port: 9001
+  nodePort: 30901
+
+# NOTE: users + buckets are bootstrapped by a Job we apply separately.
+# See manifests/minio-bootstrap-job.yaml.
+# Don't use the chart's `users:` / `buckets:` blocks — they're flaky.
