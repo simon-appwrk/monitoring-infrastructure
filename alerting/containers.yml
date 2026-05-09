@@ -1,0 +1,50 @@
+groups:
+  - name: containers
+    rules:
+
+      - alert: ContainerRestartLoop
+        expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 * 15 > 3
+        for: 5m
+        labels:
+          project: "{{ $labels.label_app_kubernetes_io_part_of }}"
+          environment: "{{ $labels.label_environment }}"
+          team: "{{ $labels.label_team }}"
+          severity: warning
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} restarting"
+          description: "Container {{ $labels.container }} restarted >3 times in 15m."
+
+      - alert: ContainerOOMKilled
+        expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+        for: 0m
+        labels:
+          project: "{{ $labels.label_app_kubernetes_io_part_of }}"
+          environment: "{{ $labels.label_environment }}"
+          team: "{{ $labels.label_team }}"
+          severity: critical
+        annotations:
+          summary: "OOMKilled: {{ $labels.namespace }}/{{ $labels.pod }}"
+
+      - alert: ContainerImagePullFailing
+        expr: kube_pod_container_status_waiting_reason{reason=~"ErrImagePull|ImagePullBackOff"} == 1
+        for: 5m
+        labels:
+          project: "{{ $labels.label_app_kubernetes_io_part_of }}"
+          environment: "{{ $labels.label_environment }}"
+          team: "{{ $labels.label_team }}"
+          severity: warning
+        annotations:
+          summary: "Image pull failing: {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: "Reason: {{ $labels.reason }}. Check Harbor permissions and image tag."
+
+      - alert: DockerHostContainerDown
+        # cAdvisor: container_last_seen tracks containers; if it stops updating the container is gone
+        expr: time() - container_last_seen{name!=""} > 300
+        for: 5m
+        labels:
+          project: "{{ $labels.project }}"
+          environment: "{{ $labels.environment }}"
+          team: "{{ $labels.team }}"
+          severity: warning
+        annotations:
+          summary: "Docker container {{ $labels.name }} on {{ $labels.instance }} stopped"

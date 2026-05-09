@@ -1,0 +1,151 @@
+# Harbor values
+# Chart: harbor/harbor
+# Sized for single-node k3s. TLS terminated by cloudflared — Harbor speaks HTTP internally.
+
+expose:
+  type: nodePort
+  tls:
+    enabled: false              # cloudflared handles TLS at the edge
+  nodePort:
+    name: harbor
+    ports:
+      http:
+        port: 80
+        nodePort: 30002
+
+# TODO: set to actual cloudflared hostname
+externalURL: https://harbor.example.com
+
+# Admin password comes from Secret "harbor-admin" (created by install.sh)
+existingSecretAdminPassword: harbor-admin
+existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
+
+# Bundled internal Postgres + Redis (acceptable for this scale; data loss on rebuild is OK)
+database:
+  type: internal
+  internal:
+    # Password from Secret "harbor-database" via existingSecret pattern
+    existingSecret: harbor-database
+    existingSecretKey: POSTGRES_PASSWORD
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+redis:
+  type: internal
+  internal:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+# Image storage on MinIO so we don't double up on PVC use
+persistence:
+  enabled: true
+  imageChartStorage:
+    type: s3
+    s3:
+      region: us-east-1
+      bucket: harbor-blobs
+      accesskey: harbor
+      # secretkey overridden via --set from values.secrets.local.yaml in install.sh
+      secretkey: CHANGEME-overridden-by-secrets-file
+      regionendpoint: http://minio.obs-storage.svc:9000
+      encrypt: false
+      secure: false
+      v4auth: true
+  persistentVolumeClaim:
+    database:
+      size: 10Gi
+      storageClass: local-path
+    redis:
+      size: 5Gi
+      storageClass: local-path
+    jobservice:
+      jobLog:
+        size: 5Gi
+        storageClass: local-path
+
+# Trivy: nice to have. Costs ~512Mi RAM. Disable if memory pressure on the node.
+trivy:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+# Notary off — adds 2 pods, rarely used
+notary:
+  enabled: false
+
+# Per-component sizing
+core:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+jobservice:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+registry:
+  replicas: 1
+  registry:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  controller:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+portal:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# Metrics for Prometheus to scrape
+metrics:
+  enabled: true
+  core:
+    path: /metrics
+    port: 8001
+  registry:
+    path: /metrics
+    port: 8001
+  jobservice:
+    path: /metrics
+    port: 8001
+  exporter:
+    path: /metrics
+    port: 8001
+
+# RBAC: configure OIDC after install via the UI (Administration → Configuration → Authentication).
+# Auth Mode: OIDC. Provider: Keycloak. Group claim: groups. Map proj-<name>-dev → Developer on project <name>.

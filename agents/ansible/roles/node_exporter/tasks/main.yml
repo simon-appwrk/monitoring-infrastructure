@@ -1,0 +1,51 @@
+---
+- name: node_exporter user
+  user:
+    name: node_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Download node_exporter
+  unarchive:
+    src: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version | default('1.8.2') }}/node_exporter-{{ node_exporter_version | default('1.8.2') }}.linux-amd64.tar.gz"
+    dest: /tmp/
+    remote_src: true
+    creates: "/tmp/node_exporter-{{ node_exporter_version | default('1.8.2') }}.linux-amd64/node_exporter"
+
+- name: Install binary
+  copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version | default('1.8.2') }}.linux-amd64/node_exporter"
+    dest: /usr/local/bin/node_exporter
+    owner: root
+    group: root
+    mode: '0755'
+    remote_src: true
+  notify: restart node_exporter
+
+- name: systemd unit
+  copy:
+    src: "{{ playbook_dir }}/../systemd/node_exporter.service"
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart node_exporter
+
+- name: Enable + start
+  systemd:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Open port 9100 (UFW)
+  ufw:
+    rule: allow
+    port: '9100'
+    proto: tcp
+    src: "{{ prometheus_cidr | default('10.0.0.0/8') }}"
+  when: ansible_facts['os_family'] == 'Debian'
+  ignore_errors: true   # ufw may not be installed

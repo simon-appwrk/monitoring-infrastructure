@@ -1,0 +1,63 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  - url: ${LOKI_URL}
+
+scrape_configs:
+  - job_name: system
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: system
+          project: ${PROJECT}
+          environment: ${ENVIRONMENT}
+          team: ${TEAM}
+          host: ${HOSTNAME}
+          host_class: ${HOST_CLASS}
+          __path__: /var/log/{syslog,messages,auth.log,kern.log}
+
+  - job_name: journal
+    journal:
+      json: false
+      max_age: 12h
+      labels:
+        job: journal
+        project: ${PROJECT}
+        environment: ${ENVIRONMENT}
+        team: ${TEAM}
+        host: ${HOSTNAME}
+        host_class: ${HOST_CLASS}
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: 'unit'
+
+{% if host_class == 'docker-host' %}
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__meta_docker_container_label_project]
+        target_label: project
+      - source_labels: [__meta_docker_container_label_environment]
+        target_label: environment
+      - source_labels: [__meta_docker_container_label_team]
+        target_label: team
+      - source_labels: [__meta_docker_container_label_service]
+        target_label: service
+      - source_labels: [__meta_docker_container_name]
+        regex: '/(.+)'
+        target_label: container
+      - target_label: host
+        replacement: ${HOSTNAME}
+      - target_label: host_class
+        replacement: docker-host
+      - source_labels: [project]
+        regex: ^$
+        action: drop
+{% endif %}

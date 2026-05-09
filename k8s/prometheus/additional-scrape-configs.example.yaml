@@ -1,0 +1,82 @@
+# This is the source for the Secret "additional-scrape-configs" referenced in values.yaml.
+# Create the Secret like this:
+#   kubectl create secret generic additional-scrape-configs \
+#     -n obs-metrics \
+#     --from-file=prometheus-additional.yaml=additional-scrape-configs.example.yaml
+#
+# Re-create + restart Prometheus pods to pick up changes (or use prometheus-operator's reload).
+
+# ──────────────────────────────────────────────────────────────────
+# Static targets: cloud VMs and VPS hosts running node_exporter
+# ──────────────────────────────────────────────────────────────────
+- job_name: 'vm-node-exporter'
+  static_configs:
+    - targets:
+        - '10.0.1.10:9100'
+        - '10.0.1.11:9100'
+      labels:
+        project: infra
+        environment: production
+        team: platform
+        host_class: cloud-vm
+
+- job_name: 'vps-node-exporter'
+  static_configs:
+    - targets:
+        - 'vps-1.example.com:9100'
+        - 'vps-2.example.com:9100'
+      labels:
+        project: infra
+        environment: production
+        team: platform
+        host_class: vps
+
+# ──────────────────────────────────────────────────────────────────
+# Static targets: Docker hosts running cadvisor
+# ──────────────────────────────────────────────────────────────────
+- job_name: 'docker-cadvisor'
+  static_configs:
+    - targets:
+        - '10.0.2.10:8080'
+        - '10.0.2.11:8080'
+      labels:
+        project: infra
+        environment: production
+        team: platform
+        host_class: docker-host
+
+# ──────────────────────────────────────────────────────────────────
+# Per-project app metrics (one job per project; replace with your apps)
+# ──────────────────────────────────────────────────────────────────
+- job_name: 'app-payment-api'
+  metrics_path: /metrics
+  static_configs:
+    - targets:
+        - 'payment-api-1.internal:8080'
+      labels:
+        project: payment-api
+        environment: production
+        team: backend
+
+# ──────────────────────────────────────────────────────────────────
+# Blackbox availability checks (requires prometheus-blackbox-exporter
+# deployed separately; below is the scrape pattern)
+# ──────────────────────────────────────────────────────────────────
+- job_name: 'blackbox-http'
+  metrics_path: /probe
+  params:
+    module: [http_2xx]
+  static_configs:
+    - targets:
+        - https://payment-api.example.com/healthz
+      labels:
+        project: payment-api
+        environment: production
+        team: backend
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox-exporter.obs-metrics.svc:9115

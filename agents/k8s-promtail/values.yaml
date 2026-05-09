@@ -1,0 +1,53 @@
+# Promtail DaemonSet for K8s clusters that should ship pod logs to central Loki.
+# Chart: grafana/promtail
+#
+# Install:
+#   helm upgrade --install promtail grafana/promtail \
+#     -n obs-logs --create-namespace \
+#     -f values.yaml \
+#     --set config.clients[0].url=http://loki.obs.example.com:30100/loki/api/v1/push
+
+config:
+  clients:
+    - url: http://loki.obs.example.com:30100/loki/api/v1/push   # TODO(decide): real URL
+
+  snippets:
+    # Add the standard label set to every K8s log stream.
+    # Apps must set Pod labels: app.kubernetes.io/part-of=<project>, environment=, team=
+    pipelineStages:
+      - cri: {}
+      - json:
+          expressions:
+            level: level
+      - labels:
+          level:
+
+    extraRelabelConfigs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_part_of]
+        target_label: project
+      - source_labels: [__meta_kubernetes_pod_label_environment]
+        target_label: environment
+      - source_labels: [__meta_kubernetes_pod_label_team]
+        target_label: team
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        target_label: service
+      - target_label: host_class
+        replacement: k8s-node
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: host
+      # Drop pods without project label so unrouted logs don't pollute the store
+      - source_labels: [project]
+        regex: ^$
+        action: drop
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+# Promtail needs to read /var/log on the node + container runtime fs
+tolerations:
+  - effect: NoSchedule
+    operator: Exists

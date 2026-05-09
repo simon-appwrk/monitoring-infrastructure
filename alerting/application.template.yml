@@ -1,0 +1,49 @@
+# Per-project application alert template.
+# Copy to alerting/projects/<project>.yml and edit.
+# CI validates that every rule's `project` label matches the filename.
+
+groups:
+  - name: application-payment-api          # rename per project
+    rules:
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum by(project) (rate(http_requests_total{project="payment-api",status=~"5.."}[5m]))
+            /
+            sum by(project) (rate(http_requests_total{project="payment-api"}[5m]))
+          ) > 0.01
+        for: 5m
+        labels:
+          project: payment-api
+          environment: production
+          team: backend
+          severity: critical
+        annotations:
+          summary: "payment-api 5xx rate >1%"
+          description: "5xx error rate over the last 5m is {{ $value | humanizePercentage }}."
+
+      - alert: HighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum by(le, project) (rate(http_request_duration_seconds_bucket{project="payment-api"}[5m]))
+          ) > 1.0
+        for: 10m
+        labels:
+          project: payment-api
+          environment: production
+          team: backend
+          severity: warning
+        annotations:
+          summary: "payment-api p99 latency >1s"
+
+      - alert: AppDown
+        expr: up{project="payment-api"} == 0
+        for: 2m
+        labels:
+          project: payment-api
+          environment: production
+          team: backend
+          severity: critical
+        annotations:
+          summary: "payment-api instance {{ $labels.instance }} down"

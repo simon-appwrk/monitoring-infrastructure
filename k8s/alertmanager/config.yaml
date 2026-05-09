@@ -1,0 +1,134 @@
+global:
+  resolve_timeout: 5m
+  smtp_from: alerts@example.com
+  smtp_smarthost: smtp.example.com:587
+  smtp_auth_username: alerts@example.com
+  smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-webhooks/smtp-password
+  smtp_require_tls: true
+
+# ──────────────────────────────────────────────────────────────────
+# Routing tree (mirrors docs/alerting.md)
+# ──────────────────────────────────────────────────────────────────
+route:
+  receiver: unrouted-catchall
+  group_by: ['alertname', 'project', 'environment']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+
+    # Drop info-severity to UI-only
+    - matchers:
+        - severity = "info"
+      receiver: 'null'
+
+    # Unrouted alerts (missing labels) — page platform team always
+    - matchers:
+        - team = "unrouted"
+      receiver: platform-slack
+      continue: false
+
+    # Infra alerts — platform team owns
+    - matchers:
+        - project = "infra"
+      receiver: platform-slack
+      routes:
+        - matchers:
+            - severity = "critical"
+          receiver: platform-critical
+
+    # Production critical — full fan-out to owning team
+    - matchers:
+        - environment = "production"
+          severity = "critical"
+      receiver: team-prod-critical
+      group_wait: 10s
+
+    # Production warning — Slack only
+    - matchers:
+        - environment = "production"
+          severity = "warning"
+      receiver: team-prod-warning
+
+    # Staging critical — Slack only, no email/Telegram
+    - matchers:
+        - environment = "staging"
+          severity = "critical"
+      receiver: team-staging-warning
+
+# ──────────────────────────────────────────────────────────────────
+# Inhibition: don't page about containers if the host is down
+# ──────────────────────────────────────────────────────────────────
+inhibit_rules:
+  - source_matchers: [alertname = "NodeDown"]
+    target_matchers: [alertname =~ "Container.*|App.*|.*Down"]
+    equal: [instance]
+
+  - source_matchers: [alertname = "LokiDown"]
+    target_matchers: [alertname =~ "Log.*"]
+    equal: []
+
+# ──────────────────────────────────────────────────────────────────
+# Receivers — webhook URLs come from the alertmanager-webhooks Secret
+# (mounted at /etc/alertmanager/secrets/alertmanager-webhooks/<key> by prometheus-operator)
+# ──────────────────────────────────────────────────────────────────
+receivers:
+  - name: 'null'
+
+  - name: unrouted-catchall
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+        channel: '#obs-platform'
+        title: '[UNROUTED] {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}*{{ .Labels.alertname }}* — {{ .Annotations.summary }}{{ end }}'
+        send_resolved: true
+
+  - name: platform-slack
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+        channel: '#infra-oncall'
+        title: '[{{ .CommonLabels.severity }}] {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}{{ end }}'
+        send_resolved: true
+
+  - name: platform-critical
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+        channel: '#infra-oncall'
+        title: ':rotating_light: CRITICAL — {{ .GroupLabels.alertname }}'
+        send_resolved: true
+    email_configs:
+      - to: oncall@example.com
+        send_resolved: true
+
+  - name: team-prod-critical
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+        channel: '#alerts-{{ .CommonLabels.team }}'
+        title: ':rotating_light: PROD CRITICAL — {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}*{{ .Labels.project }}/{{ .Labels.environment }}*\n{{ .Annotations.summary }}\n{{ .Annotations.description }}\n<{{ .GeneratorURL }}|graph>{{ end }}'
+        send_resolved: true
+    email_configs:
+      - to: '{{ .CommonLabels.team }}@example.com'
+        send_resolved: true
+    webhook_configs:
+      # Telegram via a small bridge service (e.g. github.com/krpn/prometheus-alertmanager-bot)
+      - url: http://alert-bridge.obs-metrics.svc/telegram
+        send_resolved: true
+
+  - name: team-prod-warning
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+        channel: '#alerts-{{ .CommonLabels.team }}'
+        title: ':warning: PROD — {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+  - name: team-staging-warning
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/alertmanager-webhooks/slack-platform-url
+        channel: '#alerts-{{ .CommonLabels.team }}-staging'
+        title: '[staging] {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl

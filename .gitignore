@@ -1,0 +1,26 @@
+# ─── SECRETS — never commit ─────────────────────────────────────────
+# Convention: *.secrets.local.yaml (Helm values) and *.local.yaml (raw K8s manifests)
+# Every secret-bearing file has a *.example sibling that IS committed.
+**/*.secrets.local.yaml
+**/secrets.local.yaml
+**/secrets.local.yml
+**/*.local.yaml
+**/*.local.yml
+
+# Ansible inventory often holds host IPs / project metadata
+agents/ansible/inventory.yml
+
+# Generic secret patterns
+**/secrets/
+**/*.secret.yaml
+**/*.secret.yml
+.env
+*.local
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

@@ -1,0 +1,27 @@
+# Snippet: a per-project Alertmanager child route.
+# Paste under `route.routes` in k8s/alertmanager/config.yaml when a project needs custom routing.
+
+- matchers:
+    - project = "payment-api"
+      environment = "production"
+      severity = "critical"
+  receiver: payment-api-prod-critical
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 1h     # tighter than default for paging-grade alerts
+  continue: false
+
+# Then add the receiver under `receivers:`:
+
+- name: payment-api-prod-critical
+  slack_configs:
+    - api_url_file: /etc/alertmanager/secrets/slack-url-payment-api
+      channel: '#payment-api-alerts'
+      title: ':rotating_light: PROD CRITICAL — {{ .GroupLabels.alertname }}'
+      send_resolved: true
+  webhook_configs:
+    - url: http://alert-bridge.obs-metrics.svc/telegram?chat=payment-api
+      send_resolved: true
+  email_configs:
+    - to: payment-api-oncall@example.com
+      send_resolved: true

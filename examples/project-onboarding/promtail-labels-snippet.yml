@@ -1,0 +1,29 @@
+# Snippet: Docker container labels that Promtail picks up automatically.
+# Apply via docker-compose, docker run, or your orchestrator.
+
+# docker-compose.yml example
+services:
+  payment-api:
+    image: harbor.example.com/payment-api/api:1.4.2
+    labels:
+      project: payment-api
+      environment: production
+      team: backend
+      service: api
+    # … rest of service def
+
+# docker run example:
+#   docker run -d --name payment-api \
+#     -l project=payment-api \
+#     -l environment=production \
+#     -l team=backend \
+#     -l service=api \
+#     harbor.example.com/payment-api/api:1.4.2
+
+# K8s Pod template example:
+#   metadata:
+#     labels:
+#       app.kubernetes.io/name: api
+#       app.kubernetes.io/part-of: payment-api    # → project label
+#       environment: production
+#       team: backend

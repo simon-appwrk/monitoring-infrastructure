@@ -1,0 +1,57 @@
+# Agent stack for a Docker host. Run with:
+#   PROJECT=payment-api ENVIRONMENT=production TEAM=backend \
+#     docker compose -f docker-compose.yml up -d
+#
+# All three agents run as containers. node_exporter uses host PID/network/filesystem
+# namespaces so it sees the host (not just the container).
+
+services:
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    # Exposes :9100 on host
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8080:8080"
+
+  promtail:
+    image: grafana/promtail:3.2.0
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/var/lib/promtail
+    command: -config.file=/etc/promtail/config.yml -config.expand-env=true
+    environment:
+      - PROJECT=${PROJECT:?PROJECT is required}
+      - ENVIRONMENT=${ENVIRONMENT:?ENVIRONMENT is required}
+      - TEAM=${TEAM:?TEAM is required}
+      - HOSTNAME=${HOSTNAME}
+      - LOKI_URL=${LOKI_URL:-http://loki.obs.example.com:30100/loki/api/v1/push}
+
+volumes:
+  promtail-positions:

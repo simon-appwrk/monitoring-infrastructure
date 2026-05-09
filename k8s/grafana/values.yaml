@@ -1,0 +1,89 @@
+# Grafana values
+# Chart: grafana/grafana
+# Sized for single-node k3s. Secrets are in values.secrets.local.yaml (gitignored).
+
+service:
+  type: NodePort
+  nodePort: 30030
+
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClassName: local-path
+
+# Admin credentials live in Secret "grafana-admin" (created from values.secrets.local.yaml)
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+
+grafana.ini:
+  server:
+    # TODO: set to actual cloudflared hostname
+    root_url: https://grafana.example.com
+    # cloudflared terminates TLS, so trust X-Forwarded-Proto so Grafana generates https URLs
+    enforce_domain: false
+  auth:
+    disable_login_form: false
+    oauth_auto_login: false
+  auth.generic_oauth:
+    enabled: true
+    name: Keycloak
+    client_id: grafana
+    # client_secret comes from Secret "grafana-oidc" via env (see envFromSecret below)
+    scopes: openid profile email groups
+    # TODO: set to actual Keycloak realm URL
+    auth_url: https://auth.example.com/realms/main/protocol/openid-connect/auth
+    token_url: https://auth.example.com/realms/main/protocol/openid-connect/token
+    api_url: https://auth.example.com/realms/main/protocol/openid-connect/userinfo
+    role_attribute_path: contains(groups[*], 'obs-admins') && 'Admin' || 'Viewer'
+    allow_assign_grafana_admin: true
+    allow_sign_up: true
+  users:
+    viewers_can_edit: false
+    editors_can_admin: false
+  explore:
+    enabled: false   # Viewers can't run arbitrary queries
+  log:
+    mode: console
+
+# Inject Keycloak client secret as GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET
+envFromSecret: grafana-oidc
+
+# Datasources — Prometheus + Loki (in-cluster service URLs)
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://kps-kube-prometheus-stack-prometheus.obs-metrics.svc:9090
+        isDefault: true
+        editable: false
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.obs-logs.svc:3100
+        editable: false
+        jsonData:
+          maxLines: 5000
+
+# Dashboards — sidecar picks up ConfigMaps labelled grafana_dashboard=1
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    folderAnnotation: grafana_folder
+    provider:
+      foldersFromFilesStructure: true
+  datasources:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi

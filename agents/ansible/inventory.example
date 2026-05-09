@@ -1,0 +1,39 @@
+# Inventory grouped by host_class so the playbook can apply the right role set per group.
+# Copy to inventory.yml and fill in.
+
+all:
+  vars:
+    loki_url: "http://loki.obs.example.com:30100/loki/api/v1/push"
+
+  children:
+
+    cloud_vms:
+      vars:
+        host_class: cloud-vm
+      hosts:
+        vm-app-1.internal:
+          project: payment-api
+          environment: production
+          team: backend
+        vm-app-2.internal:
+          project: payment-api
+          environment: production
+          team: backend
+
+    vps_servers:
+      vars:
+        host_class: vps
+      hosts:
+        vps-1.example.com:
+          project: marketing-site
+          environment: production
+          team: frontend
+
+    docker_hosts:
+      vars:
+        host_class: docker-host
+      hosts:
+        docker-1.internal:
+          project: data-pipeline
+          environment: production
+          team: data

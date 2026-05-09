@@ -1,0 +1,23 @@
+[Unit]
+Description=Prometheus node_exporter
+Documentation=https://github.com/prometheus/node_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter \
+  --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|run|var/lib/docker)($|/) \
+  --collector.netclass.ignored-devices=^(veth.*|docker.*|cali.*|lo)$ \
+  --web.listen-address=0.0.0.0:9100
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

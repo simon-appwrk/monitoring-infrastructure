@@ -1,0 +1,32 @@
+---
+# Onboard hosts to the observability platform.
+# Usage:
+#   ansible-playbook -i inventory.yml playbook.yml
+#
+# Per-host vars required: project, environment, team, host_class
+
+- name: Validate required vars
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Required vars are set
+      assert:
+        that:
+          - project is defined and project | length > 0
+          - environment in ['production', 'staging', 'dev']
+          - team is defined and team | length > 0
+          - host_class in ['cloud-vm', 'vps', 'docker-host', 'k8s-node']
+        fail_msg: "Missing or invalid project/environment/team/host_class on {{ inventory_hostname }}"
+
+- name: Common metrics + log shipping (all hosts)
+  hosts: all
+  become: true
+  roles:
+    - node_exporter
+    - promtail
+
+- name: Container metrics (Docker hosts only)
+  hosts: docker_hosts
+  become: true
+  roles:
+    - docker_metrics

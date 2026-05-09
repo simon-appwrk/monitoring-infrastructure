@@ -1,0 +1,133 @@
+# kube-prometheus-stack values
+# Chart: prometheus-community/kube-prometheus-stack
+# Sized for single-node k3s (7.7Gi RAM / 116Gi disk).
+
+# We disable the bundled Grafana — we install our own (k8s/grafana/) so we own its config cleanly.
+grafana:
+  enabled: false
+
+alertmanager:
+  service:
+    type: NodePort
+    nodePort: 30093
+  alertmanagerSpec:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+    # Mount the alertmanager-webhooks Secret at /etc/alertmanager/secrets/alertmanager-webhooks/
+    # (created from k8s/alertmanager/secrets.local.yaml — see k8s/README.md)
+    secrets:
+      - alertmanager-webhooks
+
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    replicas: 1
+    retention: 15d
+    retentionSize: "25GB"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 30Gi
+
+    # Pick up rules from any ConfigMap with this label (created from ../alerting/)
+    ruleSelector:
+      matchLabels:
+        prometheus: kube-prometheus
+    ruleNamespaceSelector: {}
+
+    externalLabels:
+      cluster: central
+
+    # Additional scrape targets for non-K8s hosts (cloud VMs, VPS, Docker hosts).
+    # The Secret "additional-scrape-configs" is created manually — see install.sh.
+    additionalScrapeConfigsSecret:
+      enabled: true
+      name: additional-scrape-configs
+      key: prometheus-additional.yaml
+
+# node-exporter DaemonSet covers the k3s node. For non-K8s hosts, see ../../agents/.
+nodeExporter:
+  enabled: true
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
+kubeStateMetrics:
+  enabled: true
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      memory: 200Mi
+
+# k3s-specific: kube-proxy/scheduler/controller metrics aren't on standard endpoints.
+# Disable scrape jobs that would otherwise fail on k3s.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    general: true
+    k8s: true
+    kubeApiserver: true
+    kubeApiserverAvailability: true
+    kubelet: true
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true
+    # Disabled — not exposed on k3s
+    etcd: false
+    kubeApiserverSlos: false
+    kubeProxy: false
+    kubeScheduler: false

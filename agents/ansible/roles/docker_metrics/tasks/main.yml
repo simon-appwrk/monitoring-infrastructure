@@ -1,0 +1,26 @@
+---
+- name: cAdvisor container
+  community.docker.docker_container:
+    name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    state: started
+    restart_policy: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8080:8080"
+
+- name: Open port 8080 for Prometheus to scrape cadvisor (UFW)
+  ufw:
+    rule: allow
+    port: '8080'
+    proto: tcp
+    src: "{{ prometheus_cidr | default('10.0.0.0/8') }}"
+  when: ansible_facts['os_family'] == 'Debian'
+  ignore_errors: true
