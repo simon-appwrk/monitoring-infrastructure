@@ -1,0 +1,52 @@
+# PM2 log scraping snippet for Promtail.
+# Paste under `scrape_configs:` in the host's promtail config.yml.
+#
+# PREREQ: Promtail (running as user `promtail`) must be able to read PM2's log files.
+# Two ways to grant access:
+#
+#   (a) RECOMMENDED: configure PM2 to write to /var/log/pm2/ instead of ~/.pm2/logs/
+#       In your ecosystem file:
+#         module.exports = {
+#           apps: [{
+#             name: "payment-api",
+#             script: "./server.js",
+#             out_file:   "/var/log/pm2/payment-api-out.log",
+#             error_file: "/var/log/pm2/payment-api-error.log",
+#           }]
+#         }
+#       Then: sudo mkdir -p /var/log/pm2 && sudo chown <pm2-user>:adm /var/log/pm2
+#       Promtail's group `adm` reads it.
+#
+#   (b) ALT: open up ~/.pm2 perms (one per home dir):
+#       chmod o+rx /home/<user>/.pm2 /home/<user>/.pm2/logs
+#       chmod o+r  /home/<user>/.pm2/logs/*.log
+#       Add a logrotate hook that re-applies o+r after rotation.
+
+- job_name: pm2
+  static_configs:
+    - targets: [localhost]
+      labels:
+        job: pm2
+        project: ${PROJECT}        # set via promtail env file (or hardcode if mixed)
+        environment: ${ENVIRONMENT}
+        team: ${TEAM}
+        host: ${HOSTNAME}
+        host_class: ${HOST_CLASS}
+        __path__: /var/log/pm2/*.log
+        # ALT (b): __path__: /home/*/.pm2/logs/*.log
+
+  pipeline_stages:
+    # Extract service name + stream from filename: <service>-(out|error).log
+    - regex:
+        source: filename
+        expression: '/(?P<service>[^/]+)-(?P<stream>out|error)\.log$'
+    - labels:
+        service:
+        stream:
+
+    # If your app logs JSON (most modern Node apps do via pino/winston), pull `level` up
+    - json:
+        expressions:
+          level: level
+    - labels:
+        level:

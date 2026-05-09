@@ -61,3 +61,31 @@ scrape_configs:
         regex: ^$
         action: drop
 {% endif %}
+
+{% if has_pm2 | default(false) %}
+  # PM2 logs — see examples/pm2-promtail-snippet.yml for permissions setup.
+  # Set has_pm2: true in inventory.yml for hosts running PM2.
+  - job_name: pm2
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: pm2
+          project: ${PROJECT}
+          environment: ${ENVIRONMENT}
+          team: ${TEAM}
+          host: ${HOSTNAME}
+          host_class: ${HOST_CLASS}
+          __path__: {{ pm2_log_path | default('/var/log/pm2/*.log') }}
+    pipeline_stages:
+      - regex:
+          source: filename
+          expression: '/(?P<service>[^/]+)-(?P<stream>out|error)\.log$'
+      - labels:
+          service:
+          stream:
+      - json:
+          expressions:
+            level: level
+      - labels:
+          level:
+{% endif %}

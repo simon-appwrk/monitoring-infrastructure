@@ -17,6 +17,13 @@ agents/ansible/inventory.yml
 .env
 *.local
 
+# Terraform state + tfvars (lambda-promtail)
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/terraform.tfvars
+**/.terraform.lock.hcl
+
 # Editor / OS
 .vscode/
 .idea/
